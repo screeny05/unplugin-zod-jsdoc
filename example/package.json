@@ -1,0 +1,20 @@
+{
+  "name": "vite-plugin-zod-jsdoc-example",
+  "version": "1.0.0",
+  "description": "Example demonstrating vite-plugin-zod-jsdoc",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": ["vite", "plugin", "zod", "jsdoc", "example"],
+  "author": "",
+  "license": "ISC"
+}

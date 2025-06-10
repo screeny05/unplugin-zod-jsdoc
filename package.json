@@ -1,0 +1,106 @@
+{
+  "name": "unplugin-zod-jsdoc",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Universal plugin for transforming JSDoc comments on Zod v4 schemas into runtime metadata",
+  "exports": {
+    ".": "./dist/index.js",
+    "./astro": "./dist/astro.js",
+    "./esbuild": "./dist/esbuild.js",
+    "./farm": "./dist/farm.js",
+    "./nuxt": "./dist/nuxt.js",
+    "./rollup": "./dist/rollup.js",
+    "./rspack": "./dist/rspack.js",
+    "./types": "./dist/types.js",
+    "./vite": "./dist/vite.js",
+    "./webpack": "./dist/webpack.js",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/*",
+        "./*"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "zod",
+    "jsdoc",
+    "unplugin",
+    "vite",
+    "webpack",
+    "rollup",
+    "transform"
+  ],
+  "author": "Sebastian Langer <sl@scn.cx>",
+  "license": "MIT",
+  "homepage": "https://github.com/screeny05/unplugin-zod-jsdoc#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/screeny05/unplugin-zod-jsdoc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/screeny05/unplugin-zod-jsdoc/issues"
+  },
+  "packageManager": "pnpm@10.11.1",
+  "peerDependencies": {
+    "zod": "^3.25.0",
+    "@farmfe/core": ">=1",
+    "@nuxt/kit": "^3",
+    "@nuxt/schema": "^3",
+    "esbuild": "*",
+    "rollup": "^3",
+    "vite": ">=3",
+    "webpack": "^4 || ^5"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    },
+    "@farmfe/core": {
+      "optional": true
+    },
+    "@nuxt/kit": {
+      "optional": true
+    },
+    "@nuxt/schema": {
+      "optional": true
+    },
+    "esbuild": {
+      "optional": true
+    },
+    "rollup": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    },
+    "webpack": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "tsdown": "^0.12.7",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.3"
+  },
+  "dependencies": {
+    "@typescript-eslint/typescript-estree": "^8.34.0",
+    "magic-string": "^0.30.0",
+    "unplugin": "^2.3.5"
+  }
+}
