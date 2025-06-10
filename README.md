@@ -207,4 +207,4 @@ The plugin:
 
 ## License
 
-[MIT](./LICENSE) License © 2024
+[MIT](./LICENSE.md) License © 2025
