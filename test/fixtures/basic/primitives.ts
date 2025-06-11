@@ -1,4 +1,19 @@
 /**
+ * const schema
+ */
+const sConst = z.string();
+
+/**
+ * let schema
+ */
+let sLet = z.string();
+
+/**
+ * var schema
+ */
+var sVar = z.string();
+
+/**
  * String schema
  */
 const sString = z.string();
@@ -27,6 +42,21 @@ const sBigint = z.bigint();
 const sNull = z.null();
 
 // --- result ---
+
+/**
+ * const schema
+ */
+const sConst = z.string().meta({ description: "const schema" });
+
+/**
+ * let schema
+ */
+let sLet = z.string().meta({ description: "let schema" });
+
+/**
+ * var schema
+ */
+var sVar = z.string().meta({ description: "var schema" });
 
 /**
  * String schema

@@ -17,6 +17,13 @@ describe("zodJSDocPlugin", () => {
       expect(result?.code).toBe(expected);
     });
 
+    it("should transform on exported variables", () => {
+      const { input, expected } = readFixture("basic/exported.ts");
+      const result = transform(input);
+
+      expect(result?.code).toBe(expected);
+    });
+
     it("should transform on objects", () => {
       const { input, expected } = readFixture("basic/objects.ts");
       const result = transform(input);

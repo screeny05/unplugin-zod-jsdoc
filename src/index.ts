@@ -75,7 +75,16 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
           // Use oxc-walker to traverse the AST
           walk(ast, {
             enter(node) {
-              // Handle variable declarations
+              /**
+               * Handle variable declarations
+               * @example
+               * /** jsdoc comment * /
+               * const sConst = z.string();
+               * /** jsdoc comment * /
+               * let sLet = z.string();
+               * /** jsdoc comment * /
+               * var sVar = z.string();
+               */
               if (node.type === "VariableDeclaration") {
                 const varDeclaration = node;
                 for (const declaration of varDeclaration.declarations) {
@@ -179,6 +188,35 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                         start: arg.end,
                         replacement: metaCall,
                       });
+                    }
+                  }
+                }
+              }
+
+              // Handle export statements
+              if (node.type === "ExportNamedDeclaration" && node.declaration) {
+                if (node.declaration.type === "VariableDeclaration") {
+                  const varDeclaration = node.declaration;
+                  for (const declaration of varDeclaration.declarations) {
+                    if (
+                      declaration.init &&
+                      isZodExpression(declaration.init) &&
+                      !hasExistingMetaCall(declaration.init)
+                    ) {
+                      const jsdocComment = getJSDocCommentForNode(
+                        node,
+                        comments,
+                        code
+                      );
+                      if (jsdocComment) {
+                        const metaCall = createMetaCall(jsdocComment);
+                        const zodExpression = declaration.init;
+
+                        transformations.push({
+                          start: zodExpression.end,
+                          replacement: metaCall,
+                        });
+                      }
                     }
                   }
                 }
