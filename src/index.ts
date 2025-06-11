@@ -1,15 +1,9 @@
-import {
-  createUnplugin,
-  FilterPattern,
-  UnpluginFactory,
-  UnpluginInstance,
-} from "unplugin";
+import { createUnplugin, UnpluginFactory, UnpluginInstance } from "unplugin";
 import oxc, { Comment, Node, ObjectProperty } from "oxc-parser";
 import MagicString from "magic-string";
 import { walk } from "oxc-walker";
-import { Block, parse } from "comment-parser";
+import { parse, Spec } from "comment-parser";
 import { genObjectFromValues } from "knitwork";
-import { Spec } from "../node_modules/.pnpm/comment-parser@1.4.1/node_modules/comment-parser/lib/primitives.d.ts";
 
 export interface PluginOptions {
   /**
