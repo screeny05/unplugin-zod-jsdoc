@@ -57,14 +57,14 @@
   },
   "packageManager": "pnpm@10.11.1",
   "peerDependencies": {
-    "zod": "^3.25.0",
     "@farmfe/core": ">=1",
     "@nuxt/kit": "^3",
     "@nuxt/schema": "^3",
     "esbuild": "*",
     "rollup": "^3",
     "vite": ">=3",
-    "webpack": "^4 || ^5"
+    "webpack": "^4 || ^5",
+    "zod": "^3.25.0"
   },
   "peerDependenciesMeta": {
     "zod": {
@@ -99,8 +99,11 @@
     "vitest": "^3.2.3"
   },
   "dependencies": {
-    "@typescript-eslint/typescript-estree": "^8.34.0",
+    "comment-parser": "^1.4.1",
+    "knitwork": "^1.2.0",
     "magic-string": "^0.30.0",
+    "oxc-parser": "^0.72.3",
+    "oxc-walker": "^0.3.0",
     "unplugin": "^2.3.5"
   }
 }

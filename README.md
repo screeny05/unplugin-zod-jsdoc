@@ -7,10 +7,15 @@ Universal plugin for transforming JSDoc comments on Zod schemas into runtime met
 ## Features
 
 - 🔄 Universal: Works with Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm
-- 📝 Transforms JSDoc comments into Zod `.meta()` calls
+- 📝 Transforms JSDoc comments into Zod v4 `.meta()` calls
 - 🎯 TypeScript support
-- ⚡ Fast and efficient with smart filtering
+- ⚡ Fast and efficient by using the [oxc-toolchain](https://oxc.rs/docs/guide/usage/parser)
 - 🛠 Zero configuration required
+
+> [!IMPORTANT]
+> This plugin only works with Zod >= 3.25.0 and < 4.0.0.
+>
+> You need to import `zod/v4` instead of `zod` to use this plugin.
 
 ## Installation
 
@@ -18,124 +23,113 @@ Universal plugin for transforming JSDoc comments on Zod schemas into runtime met
 npm install unplugin-zod-jsdoc --save-dev
 ```
 
-## Usage
+## Configuration
 
-### Vite
+###### Build Tools
 
-```typescript
+<details>
+<summary>Vite</summary><br>
+
+```ts
 // vite.config.ts
-import UnpluginZodJsdoc from "unplugin-zod-jsdoc/vite";
+import ZodJsdoc from "unplugin-zod-jsdoc/vite";
 
 export default defineConfig({
-  plugins: [
-    UnpluginZodJsdoc({
-      /* options */
-    }),
-  ],
+  plugins: [ZodJsdoc()],
 });
 ```
 
-### Rollup
+<br></details>
+
+<details>
+<summary>Rollup</summary><br>
 
 ```javascript
 // rollup.config.js
-import UnpluginZodJsdoc from "unplugin-zod-jsdoc/rollup";
+import ZodJsdoc from "unplugin-zod-jsdoc/rollup";
 
 export default {
-  plugins: [
-    UnpluginZodJsdoc({
-      /* options */
-    }),
-  ],
+  plugins: [ZodJsdoc()],
 };
 ```
 
-### Rolldown
+<br></details>
+
+<details>
+<summary>Rolldown</summary><br>
 
 ```javascript
 // rolldown.config.js
-import UnpluginZodJsdoc from "unplugin-zod-jsdoc/rolldown";
+import ZodJsdoc from "unplugin-zod-jsdoc/rolldown";
 
 export default {
-  plugins: [
-    UnpluginZodJsdoc({
-      /* options */
-    }),
-  ],
+  plugins: [ZodJsdoc()],
 };
 ```
 
-### Webpack
+<br></details>
+
+<details>
+<summary>Webpack</summary><br>
 
 ```javascript
 // webpack.config.js
 module.exports = {
   /* ... */
-  plugins: [
-    require("unplugin-zod-jsdoc/webpack")({
-      /* options */
-    }),
-  ],
+  plugins: [require("unplugin-zod-jsdoc/webpack")()],
 };
 ```
 
-### Rspack
+<br></details>
+
+<details>
+<summary>Rspack</summary><br>
 
 ```javascript
 // rspack.config.js
 module.exports = {
   /* ... */
-  plugins: [
-    require("unplugin-zod-jsdoc/rspack")({
-      /* options */
-    }),
-  ],
+  plugins: [require("unplugin-zod-jsdoc/rspack")()],
 };
 ```
 
-### ESBuild
+<br></details>
+
+<details>
+<summary>ESBuild</summary><br>
 
 ```javascript
 // esbuild.config.js
 import { build } from "esbuild";
-import UnpluginZodJsdoc from "unplugin-zod-jsdoc/esbuild";
+import ZodJsdoc from "unplugin-zod-jsdoc/esbuild";
 
 build({
-  plugins: [UnpluginZodJsdoc()],
+  plugins: [ZodJsdoc()],
 });
 ```
 
-### Farm
+<br></details>
+
+<details>
+<summary>Farm</summary><br>
 
 ```typescript
 // farm.config.ts
-import UnpluginZodJsdoc from "unplugin-zod-jsdoc/farm";
+import ZodJsdoc from "unplugin-zod-jsdoc/farm";
 
 export default defineConfig({
-  plugins: [
-    UnpluginZodJsdoc({
-      /* options */
-    }),
-  ],
+  plugins: [ZodJsdoc()],
 });
 ```
 
+<br></details>
+
 ## Options
+
+You can pass optional options to the plugin for further customization.
 
 ```typescript
 interface PluginOptions {
-  /**
-   * File extensions to process
-   * @default ['.ts', '.tsx']
-   */
-  include?: string[];
-
-  /**
-   * File patterns to exclude
-   * @default []
-   */
-  exclude?: string[];
-
   /**
    * Enable in development mode
    * @default true
@@ -200,10 +194,9 @@ const userSchema = z.object({
 The plugin:
 
 1. **Parses TypeScript/JavaScript** files looking for Zod schemas
-2. **Finds JSDoc comments** that precede variable declarations or object properties
+2. **Finds JSDoc comments** that precede zod-calls
 3. **Transforms comments** into `.meta({ description: "..." })` calls
-4. **Preserves existing** `.meta()` calls (doesn't duplicate them)
-5. **Uses smart filtering** for optimal performance - only processes files with Zod usage
+4. **Preserves existing** `.meta()` or `.description()` calls (doesn't override them)
 
 ## License
 

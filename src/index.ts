@@ -1,18 +1,17 @@
-import { createUnplugin, UnpluginFactory, UnpluginInstance } from "unplugin";
-import { parse } from "@typescript-eslint/typescript-estree";
+import {
+  createUnplugin,
+  FilterPattern,
+  UnpluginFactory,
+  UnpluginInstance,
+} from "unplugin";
+import oxc, { Comment, Node, ObjectProperty } from "oxc-parser";
 import MagicString from "magic-string";
-import type { TSESTree } from "@typescript-eslint/typescript-estree";
+import { walk } from "oxc-walker";
+import { Block, parse } from "comment-parser";
+import { genObjectFromValues } from "knitwork";
+import { Spec } from "../node_modules/.pnpm/comment-parser@1.4.1/node_modules/comment-parser/lib/primitives.d.ts";
 
 export interface PluginOptions {
-  /**
-   * File extensions to process
-   * @default ['.ts', '.tsx']
-   */
-  include?: string[];
-  /**
-   * File patterns to exclude
-   */
-  exclude?: string[];
   /**
    * Enable in development mode
    * @default true
@@ -23,11 +22,7 @@ export interface PluginOptions {
 export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
   options = {}
 ) => {
-  const {
-    include = [".ts", ".tsx"],
-    exclude = [],
-    enableInDev = true,
-  } = options;
+  const { enableInDev = true } = options;
 
   let isDev = false;
 
@@ -39,14 +34,6 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
         process.env.NODE_ENV === "development" ||
         ((this as any).meta?.framework === "vite" &&
           (this as any).meta?.vite?.command === "serve");
-    },
-    transformInclude(id) {
-      // Check if file should be processed based on include/exclude patterns
-      const shouldInclude = include.some((ext) =>
-        ext.startsWith(".") ? id.endsWith(ext) : id.includes(ext)
-      );
-      const shouldExclude = exclude.some((pattern) => id.includes(pattern));
-      return shouldInclude && !shouldExclude;
     },
     transform: {
       filter: {
@@ -79,13 +66,8 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
         }
 
         try {
-          const ast = parse(code, {
-            loc: true,
-            range: true,
-            comment: true,
-            attachComments: true,
-            jsx: id.endsWith(".tsx"),
-          });
+          const result = oxc.parseSync(id, code);
+          const ast = result.program;
 
           const magicString = new MagicString(code);
           const transformations: Array<{
@@ -94,19 +76,47 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
           }> = [];
 
           // Get all comments from the AST
-          const comments = (ast as any).comments || [];
+          const comments = result.comments || [];
 
-          // Find all JSDoc comments and their associated nodes
-          const processNode = (node: TSESTree.Node) => {
-            // Look for variable declarations with JSDoc comments
-            if (node.type === "VariableDeclaration") {
-              for (const declaration of node.declarations) {
-                if (declaration.init && isZodExpression(declaration.init)) {
-                  // Skip if the expression already has a .meta() call
-                  if (hasExistingMetaCall(declaration.init)) {
-                    continue;
+          // Use oxc-walker to traverse the AST
+          walk(ast, {
+            enter(node) {
+              // Handle variable declarations
+              if (node.type === "VariableDeclaration") {
+                const varDeclaration = node;
+                for (const declaration of varDeclaration.declarations) {
+                  if (
+                    declaration.init &&
+                    isZodExpression(declaration.init) &&
+                    !hasExistingMetaCall(declaration.init)
+                  ) {
+                    const jsdocComment = getJSDocCommentForNode(
+                      node,
+                      comments,
+                      code
+                    );
+                    if (jsdocComment) {
+                      const metaCall = createMetaCall(jsdocComment);
+                      const zodExpression = declaration.init;
+
+                      // Add .meta() call to the end of the zod expression
+                      transformations.push({
+                        start: zodExpression.end,
+                        replacement: metaCall,
+                      });
+                    }
                   }
+                }
+              }
 
+              // Handle object properties
+              if (node.type === "Property") {
+                const property = node as ObjectProperty;
+                if (
+                  property.value &&
+                  isZodExpression(property.value) &&
+                  !hasExistingMetaCall(property.value)
+                ) {
                   const jsdocComment = getJSDocCommentForNode(
                     node,
                     comments,
@@ -114,59 +124,73 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                   );
                   if (jsdocComment) {
                     const metaCall = createMetaCall(jsdocComment);
-                    const zodExpression = declaration.init;
+                    const zodExpression = property.value;
 
-                    // Add .meta() call to the end of the zod expression
                     transformations.push({
-                      start: zodExpression.range![1],
+                      start: zodExpression.end,
                       replacement: metaCall,
                     });
                   }
                 }
               }
-            }
 
-            // Look for object properties with JSDoc comments (for nested schemas)
-            if (
-              node.type === "Property" &&
-              node.value &&
-              isZodExpression(node.value)
-            ) {
-              // Skip if the expression already has a .meta() call
-              if (hasExistingMetaCall(node.value)) {
-                return;
-              }
+              // Handle array elements and discriminated union elements
+              if (node.type === "ArrayExpression") {
+                for (const element of node.elements) {
+                  if (
+                    element &&
+                    isZodExpression(element) &&
+                    !hasExistingMetaCall(element)
+                  ) {
+                    const jsdocComment = getJSDocCommentForNode(
+                      element,
+                      comments,
+                      code
+                    );
+                    if (jsdocComment) {
+                      const metaCall = createMetaCall(jsdocComment);
+                      const zodExpression = element;
 
-              const jsdocComment = getJSDocCommentForNode(node, comments, code);
-              if (jsdocComment) {
-                const metaCall = createMetaCall(jsdocComment);
-                const zodExpression = node.value;
-
-                transformations.push({
-                  start: zodExpression.range![1],
-                  replacement: metaCall,
-                });
-              }
-            }
-
-            // Recursively process child nodes
-            for (const key in node) {
-              const child = (node as any)[key];
-              if (child && typeof child === "object") {
-                if (Array.isArray(child)) {
-                  child.forEach((item) => {
-                    if (item && typeof item === "object" && item.type) {
-                      processNode(item);
+                      transformations.push({
+                        start: zodExpression.end,
+                        replacement: metaCall,
+                      });
                     }
-                  });
-                } else if (child.type) {
-                  processNode(child);
+                  }
                 }
               }
-            }
-          };
 
-          processNode(ast);
+              /**
+               * Handle JSDoc on arguments of Zod calls (e.g., z.array(...), z.union([...]), z.tuple([...]), z.discriminatedUnion(...))
+               *
+               * E.g.
+               * z.array(
+               *   /**
+               *    * This docblock will be transformed to a .meta() call
+               *    * /
+               *   z.string()
+               * );
+               */
+              if (node.type === "CallExpression") {
+                for (const arg of node.arguments) {
+                  if (isZodExpression(arg) && !hasExistingMetaCall(arg)) {
+                    const jsdocComment = getJSDocCommentForNode(
+                      arg,
+                      comments,
+                      code
+                    );
+                    if (jsdocComment) {
+                      const metaCall = createMetaCall(jsdocComment);
+                      transformations.push({
+                        start: arg.end,
+                        replacement: metaCall,
+                      });
+                    }
+                  }
+                }
+              }
+            },
+          });
 
           // Apply transformations in reverse order to maintain correct positions
           transformations
@@ -196,89 +220,76 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
 /**
  * Check if a node represents a Zod expression
  */
-function isZodExpression(node: TSESTree.Node): boolean {
-  if (node.type === "CallExpression") {
-    const callee = node.callee;
+function isZodExpression(node: Node): boolean {
+  if (node.type !== "CallExpression") {
+    return false;
+  }
 
-    // Check for z.something() pattern
-    if (
-      callee.type === "MemberExpression" &&
-      callee.object.type === "Identifier" &&
-      callee.object.name === "z"
-    ) {
-      return true;
-    }
+  const callee = node.callee;
 
-    // Check for chained calls like z.string().optional()
-    if (callee.type === "MemberExpression" && isZodExpression(callee.object)) {
-      return true;
-    }
+  // Check for z.something() pattern
+  if (
+    callee.type === "MemberExpression" &&
+    callee.object.type === "Identifier" &&
+    callee.object.name === "z"
+  ) {
+    return true;
+  }
+
+  // Check for chained calls like z.string().optional()
+  if (callee.type === "MemberExpression" && isZodExpression(callee.object)) {
+    return true;
   }
 
   return false;
 }
 
 /**
- * Check if a Zod expression already has a .meta() call
+ * Check if a Zod expression already has a .meta() or .description() call
  */
-function hasExistingMetaCall(node: TSESTree.Node): boolean {
-  if (node.type === "CallExpression") {
-    const callee = node.callee;
+function hasExistingMetaCall(node: Node): boolean {
+  if (node.type !== "CallExpression") {
+    return false;
+  }
 
-    // Check if this is a .meta() call
-    if (
-      callee.type === "MemberExpression" &&
-      callee.property.type === "Identifier" &&
-      callee.property.name === "meta"
-    ) {
-      return true;
-    }
+  const callee = node.callee;
 
-    // Check for chained calls - recursively check the object
-    if (
-      callee.type === "MemberExpression" &&
-      callee.object.type === "CallExpression"
-    ) {
-      return hasExistingMetaCall(callee.object);
-    }
+  // Check if this is a .meta() or .description() call
+  if (
+    callee.type === "MemberExpression" &&
+    callee.property.type === "Identifier" &&
+    (callee.property.name === "meta" || callee.property.name === "description")
+  ) {
+    return true;
+  }
+
+  // Check for chained calls - recursively check the object
+  if (
+    callee.type === "MemberExpression" &&
+    callee.object.type === "CallExpression"
+  ) {
+    return hasExistingMetaCall(callee.object);
   }
 
   return false;
-}
-
-/**
- * Extract JSDoc comment text from a comment block
- */
-function extractJSDocText(commentValue: string): string {
-  return commentValue
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(
-      (line) =>
-        (line && !line.startsWith("*")) ||
-        (line.startsWith("*") && line.length > 1)
-    )
-    .map((line) => line.replace(/^\*\s?/, ""))
-    .join(" ")
-    .trim();
 }
 
 /**
  * Get JSDoc comment for a node by finding comments that precede it
  */
 function getJSDocCommentForNode(
-  node: TSESTree.Node,
-  comments: any[],
+  node: Node,
+  comments: Comment[],
   code: string
 ): string | null {
-  if (!comments || comments.length === 0 || !node.range) return null;
+  if (!comments || comments.length === 0 || !node.start) return null;
 
   // Find comments that appear before this node with minimal whitespace in between
-  const precedingComments = comments.filter((comment: any) => {
+  const precedingComments = comments.filter((comment: Comment) => {
     return (
       comment.type === "Block" &&
       comment.value.includes("*") &&
-      comment.range[1] < node.range![0]
+      comment.end < node.start
     );
   });
 
@@ -286,28 +297,66 @@ function getJSDocCommentForNode(
 
   // Get the closest preceding comment
   const closestComment = precedingComments.reduce(
-    (closest: any, current: any) => {
-      return current.range[1] > closest.range[1] ? current : closest;
+    (closest: Comment, current: Comment) => {
+      return current.end > closest.end ? current : closest;
     }
   );
 
   // Check if the comment is directly before this node (with only whitespace in between)
-  const textBetween = code.substring(closestComment.range[1], node.range![0]);
+  const textBetween = code.substring(closestComment.end, node.start);
   const isDirectlyPreceding = /^\s*$/.test(textBetween);
 
   if (!isDirectlyPreceding) return null;
 
-  return extractJSDocText(closestComment.value);
+  return `/**\n${closestComment.value}\n*/`;
+}
+
+/**
+ * Turns a JSDoc tag back into a raw string
+ */
+function commentTagToRaw(tag: Spec): string {
+  return [tag.name, tag.description, tag.type ? `{${tag.type}}` : ""]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
  * Create a .meta() call with the description
  */
 function createMetaCall(description: string): string {
-  const escapedDescription = description
-    .replace(/`/g, "\\`")
-    .replace(/\$/g, "\\$");
-  return `.meta({ description: \`${escapedDescription}\` })`;
+  const parsed = parse(description).at(0);
+  if (!parsed) {
+    return "";
+  }
+
+  const meta: Record<string, any> = {
+    description: parsed.description.replace(/\s+/g, " ").trim(),
+  };
+
+  const id = parsed.tags.find((tag) => tag.tag === "id");
+  const title = parsed.tags.find((tag) => tag.tag === "title");
+  const deprecated = parsed.tags.find((tag) => tag.tag === "deprecated");
+  const examples = parsed.tags.filter((tag) => tag.tag === "example");
+
+  if (deprecated) {
+    meta.deprecated = true;
+  }
+
+  if (title) {
+    meta.title = commentTagToRaw(title);
+  }
+
+  if (id) {
+    meta.id = commentTagToRaw(id);
+  }
+
+  if (examples.length > 0) {
+    meta.examples = examples.map((example) => commentTagToRaw(example));
+  }
+
+  return `.meta(${genObjectFromValues(meta)})`
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 // Create the unplugin instance
