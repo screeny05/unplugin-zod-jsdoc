@@ -1,7 +1,7 @@
 {
   "name": "unplugin-zod-jsdoc",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Universal plugin for transforming JSDoc comments on Zod v4 schemas into runtime metadata",
   "exports": {
     ".": "./dist/index.js",

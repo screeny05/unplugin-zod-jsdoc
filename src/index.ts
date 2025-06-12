@@ -7,7 +7,8 @@ import { genObjectFromValues } from "knitwork";
 
 export interface PluginOptions {
   /**
-   * Enable in development mode
+   * Enable in development mode.
+   * Can improve performance by disabling the transformation in development.
    * @default true
    */
   enableInDev?: boolean;

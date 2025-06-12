@@ -131,7 +131,8 @@ You can pass optional options to the plugin for further customization.
 ```typescript
 interface PluginOptions {
   /**
-   * Enable in development mode
+   * Enable in development mode.
+   * Can improve performance by disabling the transformation in development.
    * @default true
    */
   enableInDev?: boolean;
@@ -144,7 +145,8 @@ interface PluginOptions {
 
 ```typescript
 /**
- * User's full name
+ * User's full name.
+ * Second line in description.
  */
 const nameSchema = z.string().min(1);
 
@@ -167,9 +169,13 @@ const userSchema = z.object({
 
 ```typescript
 /**
- * User's full name
+ * User's full name.
+ * Second line in description.
  */
-const nameSchema = z.string().min(1).meta({ description: `User's full name` });
+const nameSchema = z
+  .string()
+  .min(1)
+  .meta({ description: `User's full name. Second line in description.` });
 
 /**
  * User's email address
@@ -187,6 +193,72 @@ const userSchema = z.object({
   name: nameSchema,
   email: emailSchema,
 });
+```
+
+As you can see, newlines are not preserved in the output.
+
+## JSON Schema
+
+The plugin can also be used to add additional metadata specific for JSON Schema generation.
+
+For this, the following jsdoc-tags are supported:
+
+- `@example`
+- `@id`
+- `@title`
+- `@deprecated`
+
+### Example:
+
+```typescript
+/**
+ * An object representing a logged-in user
+ * @id User
+ * @title User Schema
+ * @example { id: '123-456 }
+ * @deprecated Superseded by User2
+ */
+const userSchema = z.object({
+  /** Unique identifier for the user */
+  id: z.string(),
+});
+
+const dataSchema = z.object({
+  user1: userSchema,
+  user2: userSchema,
+});
+
+const jsonSchema = z.toJSONSchema(dataSchema, { target: 'draft-7', reused: 'ref' });
+
+console.log(jsonSchema); // =>
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "user1": { "$ref": "#/definitions/User" },
+    "user2": { "$ref": "#/definitions/User" }
+  },
+  "required": ["user1", "user2"],
+  "additionalProperties": false,
+  "definitions": {
+    "User": {
+      "description": "An object representing a logged-in user",
+      "title": "User Schema",
+      "examples": ["{ id: '123-456' }"],
+      "id": "User",
+      "deprecated": true,
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The unique identifier for the user",
+          "type": "string"
+        },
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  }
+}
 ```
 
 ## How it works
