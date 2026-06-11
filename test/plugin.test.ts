@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFixture, transform } from "./utils";
+import { readFixture, transform, transformWithOptions } from "./utils";
 
 describe("zodJSDocPlugin", () => {
   describe("Basic functionality", () => {
@@ -124,6 +124,35 @@ describe("zodJSDocPlugin", () => {
         "edge-cases/special-characters.ts"
       );
       const result = transform(input);
+
+      expect(result?.code).toBe(expected);
+    });
+  });
+
+  describe("Tag options", () => {
+    it("should include all tags by default", () => {
+      const { input, expected } = readFixture("jsdoc/input-all-tags.ts");
+      const result = transform(input);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should skip title and example when disabled", () => {
+      const { input } = readFixture("jsdoc/input-all-tags.ts");
+      const result = transformWithOptions(input, {
+        tags: { title: false, example: false },
+      });
+      const { expected } = readFixture("jsdoc/output-title-example-disabled.ts");
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should skip all extra tags when all disabled", () => {
+      const { input } = readFixture("jsdoc/input-all-tags.ts");
+      const result = transformWithOptions(input, {
+        tags: { id: false, title: false, deprecated: false, example: false },
+      });
+      const { expected } = readFixture("jsdoc/output-all-disabled.ts");
 
       expect(result?.code).toBe(expected);
     });

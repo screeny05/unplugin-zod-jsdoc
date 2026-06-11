@@ -21,7 +21,18 @@ export const readFixture = (filename: string) => {
  * Helper to transform input code with the plugin
  */
 export const transform = (code: string, filename = "test.ts") => {
-  const plugin = unplugin.raw({}, {} as any);
+  return transformWithOptions(code, {}, filename);
+};
+
+/**
+ * Helper to transform input code with specific plugin options
+ */
+export const transformWithOptions = (
+  code: string,
+  options: Record<string, any>,
+  filename = "test.ts"
+) => {
+  const plugin = unplugin.raw(options, {} as any);
   const handler = (plugin.transform as any)?.handler ?? plugin.transform;
   if (typeof handler === "function") {
     return handler.call({} as any, code, filename);

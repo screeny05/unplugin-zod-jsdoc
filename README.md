@@ -136,6 +136,20 @@ interface PluginOptions {
    * @default true
    */
   enableInDev?: boolean;
+  /**
+   * Control which JSDoc tags are transformed into `.meta()` calls.
+   * All tags are enabled by default.
+   */
+  tags?: {
+    /** @default true */
+    deprecated?: boolean;
+    /** @default true */
+    title?: boolean;
+    /** @default true */
+    id?: boolean;
+    /** @default true */
+    example?: boolean;
+  };
 }
 ```
 

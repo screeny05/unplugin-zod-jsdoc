@@ -2,22 +2,15 @@ import { createUnplugin, UnpluginFactory, UnpluginInstance } from "unplugin";
 import oxc, { Comment, Node, ObjectProperty } from "oxc-parser";
 import MagicString from "magic-string";
 import { walk } from "oxc-walker";
-import { parse, Spec } from "comment-parser";
-import { genObjectFromValues } from "knitwork";
+import type { PluginOptions } from "./types";
+import { createMetaCall } from "./create-meta";
 
-export interface PluginOptions {
-  /**
-   * Enable in development mode.
-   * Can improve performance by disabling the transformation in development.
-   * @default true
-   */
-  enableInDev?: boolean;
-}
+export type { PluginOptions, JSDocTagOptions } from "./types";
 
 export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
   options = {}
 ) => {
-  const { enableInDev = true } = options;
+  const { enableInDev = true, tags } = options;
 
   let isDev = false;
 
@@ -100,7 +93,7 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                       code
                     );
                     if (jsdocComment) {
-                      const metaCall = createMetaCall(jsdocComment);
+                      const metaCall = createMetaCall(jsdocComment, tags);
                       const zodExpression = declaration.init;
 
                       // Add .meta() call to the end of the zod expression
@@ -127,7 +120,7 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                     code
                   );
                   if (jsdocComment) {
-                    const metaCall = createMetaCall(jsdocComment);
+                    const metaCall = createMetaCall(jsdocComment, tags);
                     const zodExpression = property.value;
 
                     transformations.push({
@@ -152,7 +145,7 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                       code
                     );
                     if (jsdocComment) {
-                      const metaCall = createMetaCall(jsdocComment);
+                      const metaCall = createMetaCall(jsdocComment, tags);
                       const zodExpression = element;
 
                       transformations.push({
@@ -184,7 +177,7 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                       code
                     );
                     if (jsdocComment) {
-                      const metaCall = createMetaCall(jsdocComment);
+                      const metaCall = createMetaCall(jsdocComment, tags);
                       transformations.push({
                         start: arg.end,
                         replacement: metaCall,
@@ -210,7 +203,7 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
                         code
                       );
                       if (jsdocComment) {
-                        const metaCall = createMetaCall(jsdocComment);
+                        const metaCall = createMetaCall(jsdocComment, tags);
                         const zodExpression = declaration.init;
 
                         transformations.push({
@@ -342,54 +335,6 @@ function getJSDocCommentForNode(
   if (!isDirectlyPreceding) return null;
 
   return `/**\n${closestComment.value}\n*/`;
-}
-
-/**
- * Turns a JSDoc tag back into a raw string
- */
-function commentTagToRaw(tag: Spec): string {
-  return [tag.name, tag.description, tag.type ? `{${tag.type}}` : ""]
-    .filter(Boolean)
-    .join(" ");
-}
-
-/**
- * Create a .meta() call with the description
- */
-function createMetaCall(description: string): string {
-  const parsed = parse(description).at(0);
-  if (!parsed) {
-    return "";
-  }
-
-  const meta: Record<string, any> = {
-    description: parsed.description.replace(/\s+/g, " ").trim(),
-  };
-
-  const id = parsed.tags.find((tag) => tag.tag === "id");
-  const title = parsed.tags.find((tag) => tag.tag === "title");
-  const deprecated = parsed.tags.find((tag) => tag.tag === "deprecated");
-  const examples = parsed.tags.filter((tag) => tag.tag === "example");
-
-  if (deprecated) {
-    meta.deprecated = true;
-  }
-
-  if (title) {
-    meta.title = commentTagToRaw(title);
-  }
-
-  if (id) {
-    meta.id = commentTagToRaw(id);
-  }
-
-  if (examples.length > 0) {
-    meta.examples = examples.map((example) => commentTagToRaw(example));
-  }
-
-  return `.meta(${genObjectFromValues(meta)})`
-    .replace(/\n/g, " ")
-    .replace(/\s+/g, " ");
 }
 
 // Create the unplugin instance
