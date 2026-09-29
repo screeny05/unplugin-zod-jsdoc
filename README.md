@@ -142,6 +142,12 @@ interface PluginOptions {
    * @default false
    */
   mergeExistingMeta?: boolean;
+
+  /**
+   * Functions whose call returns a Zod schema, treated like a call rooted at `z`.
+   * @default []
+   */
+  schemaFactories?: string[];
 }
 ```
 
@@ -184,8 +190,66 @@ const schema = z.object({
 - **A trailing `.describe("...")`** keeps its description; a `.meta()` with the remaining JSDoc
   keys (`title`, `id`, …) is appended. A JSDoc with nothing but a description leaves it untouched.
 - **Referenced schemas are never touched**, merge or not: the plugin only handles expressions rooted
-  at `z`, so `Money.meta({ ... })` stays as written. Adding an `id` there would register a derived
-  clone under a second id.
+  at `z` or at a [schema factory](#schemafactories) call, so `Money.meta({ ... })` stays as written.
+  Adding an `id` there would register a derived clone under a second id.
+
+### `schemaFactories`
+
+The plugin only recognises a schema by its root: `z.string()`, `z.iso.date()`. A schema built by
+your own function is invisible to it, and so is its JSDoc. `schemaFactories` names those functions,
+and a call to one then counts as a root exactly like `z.string()` — chained calls, casts, object
+properties, array items and `mergeExistingMeta` all apply.
+
+```typescript
+// vite.config.ts
+ZodJsdoc({ mergeExistingMeta: true, schemaFactories: ["wellKnownString"] });
+```
+
+```typescript
+export const wellKnownString = (values: readonly string[]) =>
+  z.string().meta({ cms: { suggestions: values } });
+
+/**
+ * Well-known order status codes
+ * @id OrderStatus
+ * @title OrderStatus
+ */
+export const OrderStatus = wellKnownString(["open", "shipped"]);
+
+const Activity = z.object({
+  /** What happened. */
+  action: wellKnownString(["created", "updated"])
+    .optional()
+    .meta({ cms: { localized: false } }),
+});
+
+// becomes
+
+export const OrderStatus = wellKnownString(["open", "shipped"]).meta({
+  description: "Well-known order status codes",
+  title: "OrderStatus",
+  id: "OrderStatus",
+});
+
+const Activity = z.object({
+  action: wellKnownString(["created", "updated"])
+    .optional()
+    .meta({ description: "What happened.", cms: { localized: false } }),
+});
+```
+
+- **An entry matches the callee by name**: `wellKnownString` matches `wellKnownString(...)`, and
+  `lib.wellKnownString` matches the static member call `lib.wellKnownString(...)`. A plain entry
+  does not match a member call, nor the other way round; computed (`lib["f"]()`) and optional
+  (`lib?.f()`) calls never match. Like `z`, the name is not resolved through imports or scope.
+- **Only the call is a root.** A schema the factory returned and you stored in a variable is a
+  referenced schema, and is left alone.
+- **A file that calls a factory is transformed even if it does not import `zod/v4` itself.** Each
+  entry is added to the plugin's code filter as a substring.
+- **A key named at the use site hides the factory's.** Zod's `.meta()` puts the metadata on a new
+  schema, so in `z.toJSONSchema` a use-site `.meta({ cms: { ... } })` replaces a `cms` the factory
+  set rather than deep-merging it. That holds with or without the plugin, which only ever writes
+  `description`, `title`, `id`, `deprecated` and `examples`.
 
 ## Example
 
@@ -314,7 +378,8 @@ console.log(jsonSchema); // =>
 The plugin:
 
 1. **Parses TypeScript/JavaScript** files looking for Zod schemas — calls rooted at `z` or at a
-   namespace below it (`z.iso.date()`), also through `as`, `satisfies`, `!` and parentheses
+   namespace below it (`z.iso.date()`), or at a call to one of the `schemaFactories`, also through
+   `as`, `satisfies`, `!` and parentheses
 2. **Finds JSDoc comments** that precede zod-calls, with only whitespace or `//` line comments
    (such as an `eslint-disable-next-line`) in between
 3. **Transforms comments** into `.meta({ description: "..." })` calls. For a cast, the call goes on

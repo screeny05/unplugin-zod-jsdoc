@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFixture, transform } from "./utils";
+import { passesCodeFilter, readFixture, transform } from "./utils";
 
 describe("zodJSDocPlugin", () => {
   describe("Basic functionality", () => {
@@ -219,6 +219,57 @@ const s = z.string().meta({ description: "x", title: "y" });`;
       const result = transform(input);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("schemaFactories", () => {
+    const factories = { schemaFactories: ["wellKnownString"] };
+
+    it("should treat a listed factory call as a zod root in every context", () => {
+      const { input, expected } = readFixture("factories/contexts.ts");
+      const result = transform(input, "test.ts", factories);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should merge into a factory schema's trailing meta literal", () => {
+      const { input, expected } = readFixture("factories/merge.ts");
+      const result = transform(input, "test.ts", {
+        ...factories,
+        mergeExistingMeta: true,
+      });
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should match a dotted entry against a member callee", () => {
+      const { input, expected } = readFixture("factories/member.ts");
+      const result = transform(input, "test.ts", {
+        schemaFactories: ["lib.wellKnownString", "api.common.factory"],
+      });
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should leave factory calls alone when the option is empty", () => {
+      const { input } = readFixture("factories/contexts.ts");
+
+      expect(transform(input)).toBeNull();
+      expect(transform(input, "test.ts", { schemaFactories: [] })).toBeNull();
+    });
+
+    it("should let a file that only imports the factory through the code filter", () => {
+      const source = `import { wellKnownString } from "./common";
+
+/** @id OrderStatus */
+export const OrderStatus = wellKnownString(ORDER_STATUSES);`;
+
+      expect(passesCodeFilter(source, {})).toBe(false);
+      expect(passesCodeFilter(source, factories)).toBe(true);
+      expect(passesCodeFilter(`import { z } from "zod/v4";`, factories)).toBe(
+        true
+      );
+      expect(passesCodeFilter(`const a = 1;`, factories)).toBe(false);
     });
   });
 });

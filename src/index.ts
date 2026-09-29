@@ -27,6 +27,14 @@ export interface PluginOptions {
    * @default false
    */
   mergeExistingMeta?: boolean;
+
+  /**
+   * Functions whose call returns a Zod schema, treated like a call rooted at `z`. An entry is
+   * matched against the callee's name, `wellKnownString`, or its static member path,
+   * `lib.wellKnownString`.
+   * @default []
+   */
+  schemaFactories?: string[];
 }
 
 type Meta = Record<string, unknown>;
@@ -39,7 +47,12 @@ interface Edit {
 export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
   options = {}
 ) => {
-  const { enableInDev = true, mergeExistingMeta = false } = options;
+  const {
+    enableInDev = true,
+    mergeExistingMeta = false,
+    schemaFactories = [],
+  } = options;
+  const factories = new Set(schemaFactories);
 
   let isDev = false;
 
@@ -73,7 +86,8 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
           ],
         },
         code: {
-          include: [/from\s*['"]zod\/v4['"]/],
+          // A file can build schemas through a factory without importing zod itself.
+          include: [/from\s*['"]zod\/v4['"]/, ...factories],
         },
       },
       handler(code, id) {
@@ -99,7 +113,7 @@ export const unpluginFactory: UnpluginFactory<PluginOptions | undefined> = (
             if (
               !expression ||
               handled.has(expression.start) ||
-              !isZodExpression(expression)
+              !isZodExpression(expression, factories)
             ) {
               return;
             }
@@ -233,12 +247,45 @@ function isZodNamespace(node: Node): boolean {
 }
 
 /**
+ * The dotted name of an identifier or a static member chain, like `lib.factory`
+ */
+function staticPath(node: Node): string | null {
+  if (node.type === "Identifier") {
+    return node.name;
+  }
+  if (
+    node.type === "MemberExpression" &&
+    !node.computed &&
+    node.property.type === "Identifier"
+  ) {
+    const object = staticPath(node.object);
+    return object === null ? null : `${object}.${node.property.name}`;
+  }
+  return null;
+}
+
+/**
+ * Check for a call to one of the configured schema factories
+ */
+function isFactoryCall(node: Node, factories: Set<string>): boolean {
+  if (factories.size === 0 || node.type !== "CallExpression") {
+    return false;
+  }
+  const path = staticPath(node.callee);
+  return path !== null && factories.has(path);
+}
+
+/**
  * Check if a node represents a Zod expression
  */
-function isZodExpression(node: Node): boolean {
+function isZodExpression(node: Node, factories: Set<string>): boolean {
   const expression = unwrapExpression(node);
   if (expression.type !== "CallExpression") {
     return false;
+  }
+
+  if (isFactoryCall(expression, factories)) {
+    return true;
   }
 
   const callee = expression.callee;
@@ -252,7 +299,7 @@ function isZodExpression(node: Node): boolean {
   }
 
   // Check for chained calls like z.string().optional(), also through casts
-  return isZodExpression(callee.object);
+  return isZodExpression(callee.object, factories);
 }
 
 interface MetaLink {

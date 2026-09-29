@@ -32,3 +32,16 @@ export const transform = (
   }
   return null;
 };
+
+/**
+ * Whether the plugin's `code` filter lets a source through, with unplugin's semantics: a string
+ * matches as a substring, a RegExp by `test`, and any include pattern admits the file
+ */
+export const passesCodeFilter = (code: string, options: PluginOptions) => {
+  const plugin = unplugin.raw(options, {} as any);
+  const include: (string | RegExp)[] =
+    (plugin.transform as any)?.filter?.code?.include ?? [];
+  return include.some((pattern) =>
+    typeof pattern === "string" ? code.includes(pattern) : pattern.test(code)
+  );
+};

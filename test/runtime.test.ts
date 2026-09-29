@@ -153,4 +153,91 @@ export const Typed = z.object({ name: z.string() }) as z.ZodType<{ name: string 
     expect(mod.Typed.description).toBe("Object cast");
     expect(date.parse("2026-09-29")).toBe("2026-09-29");
   });
+  describe("schema factories", () => {
+    const factory = `
+const wellKnown = <const V extends readonly string[]>(values: V) =>
+  z.string().meta({ cms: { suggestions: values } }) as z.ZodType<V[number] | (string & {})>;
+`;
+
+    it("carries a declaration's JSDoc onto the factory's schema", async () => {
+      const mod = await load(
+        `${factory}
+/**
+ * Well-known order status codes
+ * @id RuntimeFactoryOrderStatus
+ * @title OrderStatus
+ */
+export const OrderStatus = wellKnown(["open", "shipped"]);
+`,
+        { schemaFactories: ["wellKnown"] }
+      );
+
+      expect(z.globalRegistry.get(mod.OrderStatus)).toMatchObject({
+        id: "RuntimeFactoryOrderStatus",
+        title: "OrderStatus",
+        description: "Well-known order status codes",
+      });
+
+      // The appended meta names no `cms`, so the factory's own survives through zod's
+      // inheritance from the cloned schema.
+      expect(z.toJSONSchema(mod.OrderStatus)).toMatchObject({
+        type: "string",
+        id: "RuntimeFactoryOrderStatus",
+        title: "OrderStatus",
+        description: "Well-known order status codes",
+        cms: { suggestions: ["open", "shipped"] },
+      });
+    });
+
+    it("merges JSDoc keys into a use-site meta and keeps its explicit cms", async () => {
+      const mod = await load(
+        `${factory}
+export const Schema = z.object({
+  /**
+   * What happened
+   * @title Action
+   */
+  action: wellKnown(["created", "updated"]).optional().meta({ cms: { localized: false } }),
+});
+`,
+        { schemaFactories: ["wellKnown"], mergeExistingMeta: true }
+      );
+
+      const { action } = mod.Schema.shape;
+      expect(action.meta()).toEqual({
+        description: "What happened",
+        title: "Action",
+        cms: { localized: false },
+      });
+      expect(action.unwrap().meta()).toEqual({
+        cms: { suggestions: ["created", "updated"] },
+      });
+
+      const json = z.toJSONSchema(mod.Schema) as any;
+      expect(json.properties.action).toMatchObject({
+        type: "string",
+        description: "What happened",
+        title: "Action",
+        cms: { localized: false },
+      });
+    });
+
+    it("leaves the factory call alone without the option", async () => {
+      const mod = await load(
+        `${factory}
+/** Plain */
+export const Plain = z.string();
+
+/** Ignored */
+export const Ignored = wellKnown(["a"]);
+`,
+        {}
+      );
+
+      expect(mod.Plain.description).toBe("Plain");
+      expect(z.globalRegistry.get(mod.Ignored)).toEqual({
+        cms: { suggestions: ["a"] },
+      });
+    });
+  });
 });
