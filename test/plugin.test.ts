@@ -127,5 +127,98 @@ describe("zodJSDocPlugin", () => {
 
       expect(result?.code).toBe(expected);
     });
+
+    it("should see through casts, satisfies and parentheses", () => {
+      const { input, expected } = readFixture("edge-cases/casts.ts");
+      const result = transform(input);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should transform on namespaced roots like z.iso", () => {
+      const { input, expected } = readFixture("edge-cases/namespace-root.ts");
+      const result = transform(input);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should attach JSDoc across line comments", () => {
+      const { input, expected } = readFixture(
+        "edge-cases/line-comment-between.ts"
+      );
+      const result = transform(input);
+
+      expect(result?.code).toBe(expected);
+    });
+  });
+
+  describe("mergeExistingMeta", () => {
+    const merge = { mergeExistingMeta: true };
+
+    it("should insert missing JSDoc keys into a trailing meta literal", () => {
+      const { input, expected } = readFixture("merge/insert-missing.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should never overwrite an explicit key", () => {
+      const { input, expected } = readFixture("merge/explicit-wins.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should leave a literal that already has every key untouched", () => {
+      const input = `/**
+ * Doc
+ * @title Title
+ */
+const s = z.string().meta({ description: "x", title: "y" });`;
+
+      expect(transform(input, "test.ts", merge)).toBeNull();
+    });
+
+    it("should insert before spreads and computed keys", () => {
+      const { input, expected } = readFixture("merge/literal-shapes.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should merge in every visitor context", () => {
+      const { input, expected } = readFixture("merge/contexts.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should skip shapes it cannot merge safely", () => {
+      const { input } = readFixture("merge/skip.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result).toBeNull();
+    });
+
+    it("should append meta without description after a trailing describe", () => {
+      const { input, expected } = readFixture("merge/describe.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should merge through casts and namespaced roots", () => {
+      const { input, expected } = readFixture("merge/casts.ts");
+      const result = transform(input, "test.ts", merge);
+
+      expect(result?.code).toBe(expected);
+    });
+
+    it("should keep skipping an existing meta when the option is off", () => {
+      const { input } = readFixture("merge/insert-missing.ts");
+      const result = transform(input);
+
+      expect(result).toBeNull();
+    });
   });
 });

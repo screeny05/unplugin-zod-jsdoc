@@ -1,4 +1,4 @@
-import unplugin from "../src/index";
+import unplugin, { type PluginOptions } from "../src/index";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -20,8 +20,12 @@ export const readFixture = (filename: string) => {
 /**
  * Helper to transform input code with the plugin
  */
-export const transform = (code: string, filename = "test.ts") => {
-  const plugin = unplugin.raw({}, {} as any);
+export const transform = (
+  code: string,
+  filename = "test.ts",
+  options: PluginOptions = {}
+) => {
+  const plugin = unplugin.raw(options, {} as any);
   const handler = (plugin.transform as any)?.handler ?? plugin.transform;
   if (typeof handler === "function") {
     return handler.call({} as any, code, filename);

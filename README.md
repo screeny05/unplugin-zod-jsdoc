@@ -136,8 +136,56 @@ interface PluginOptions {
    * @default true
    */
   enableInDev?: boolean;
+
+  /**
+   * Merge the JSDoc into a schema that already ends in `.meta({ ... })` instead of skipping it.
+   * @default false
+   */
+  mergeExistingMeta?: boolean;
 }
 ```
+
+### `mergeExistingMeta`
+
+By default, a schema that already carries `.meta()` or `.describe()` is left alone. With
+`mergeExistingMeta: true`, the JSDoc fills in what the explicit call leaves out:
+
+```typescript
+const schema = z.object({
+  /**
+   * Customer-facing order number
+   * @title Order number
+   */
+  number: z.string().meta({ title: "No.", cms: { hidden: true } }),
+});
+
+// becomes
+
+const schema = z.object({
+  /**
+   * Customer-facing order number
+   * @title Order number
+   */
+  number: z.string().meta({
+    description: "Customer-facing order number",
+    title: "No.",
+    cms: { hidden: true },
+  }),
+});
+```
+
+- **An explicit key always wins.** Keys the object literal already declares are never written, and
+  the JSDoc keys are inserted at the start of the literal, so a later spread (`...base`) or computed
+  key still overrides them at runtime.
+- **Only a single, trailing `.meta({ ... })` with an object literal is merged.** The schema is left
+  untouched when the argument is not an object literal (`.meta(shared)`), when `.meta()` sits in
+  the middle of the chain (`.meta({ ... }).optional()` puts it on a different schema node), or
+  when the chain has several `.meta()`/`.describe()` calls.
+- **A trailing `.describe("...")`** keeps its description; a `.meta()` with the remaining JSDoc
+  keys (`title`, `id`, …) is appended. A JSDoc with nothing but a description leaves it untouched.
+- **Referenced schemas are never touched**, merge or not: the plugin only handles expressions rooted
+  at `z`, so `Money.meta({ ... })` stays as written. Adding an `id` there would register a derived
+  clone under a second id.
 
 ## Example
 
@@ -265,10 +313,14 @@ console.log(jsonSchema); // =>
 
 The plugin:
 
-1. **Parses TypeScript/JavaScript** files looking for Zod schemas
-2. **Finds JSDoc comments** that precede zod-calls
-3. **Transforms comments** into `.meta({ description: "..." })` calls
-4. **Preserves existing** `.meta()` or `.description()` calls (doesn't override them)
+1. **Parses TypeScript/JavaScript** files looking for Zod schemas — calls rooted at `z` or at a
+   namespace below it (`z.iso.date()`), also through `as`, `satisfies`, `!` and parentheses
+2. **Finds JSDoc comments** that precede zod-calls, with only whitespace or `//` line comments
+   (such as an `eslint-disable-next-line`) in between
+3. **Transforms comments** into `.meta({ description: "..." })` calls. For a cast, the call goes on
+   the schema inside it (`z.string().meta({ ... }) as X`), so the cast keeps applying
+4. **Preserves existing** `.meta()` or `.describe()` calls (doesn't override them), unless
+   `mergeExistingMeta` is enabled — then the JSDoc fills only the keys the call lacks
 
 ## License
 
